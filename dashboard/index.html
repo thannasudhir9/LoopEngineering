@@ -1,0 +1,975 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>LoopEngineering — AI Task Monitor</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0d0f14;--bg2:#151820;--bg3:#1c2030;--bg4:#222638;
+  --border:#2d3348;--border2:#3d4460;
+  --text:#e2e6f3;--text2:#9aa0b8;--text3:#5d6480;
+  --blue:#4f8ef7;--blue2:#3a6fd8;--green:#3ecf8e;
+  --orange:#f5a623;--red:#e85d5d;--purple:#a78bfa;--cyan:#22d3ee;
+  --font:'Inter',system-ui,-apple-system,sans-serif;
+  --radius:8px;--radius2:12px;
+}
+body.light{
+  --bg:#f0f2f7;--bg2:#ffffff;--bg3:#e8eaf0;--bg4:#dde0ea;
+  --border:#d0d4e0;--border2:#b8bdcc;
+  --text:#1a1d2e;--text2:#4a5068;--text3:#8890a8;
+}
+html{height:100%}
+body{font-family:var(--font);background:var(--bg);color:var(--text);height:100%;display:flex;flex-direction:column;font-size:14px;line-height:1.5}
+#app{display:flex;flex-direction:column;height:100vh;overflow:hidden}
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:0 20px;height:52px;background:var(--bg2);border-bottom:1px solid var(--border);flex-shrink:0}
+.topbar-logo{display:flex;align-items:center;gap:10px;font-weight:700;font-size:16px;letter-spacing:-0.3px}
+.topbar-logo .dot{width:10px;height:10px;border-radius:50%;background:var(--blue);animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.ws-badge{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2)}
+.ws-dot{width:7px;height:7px;border-radius:50%;background:var(--text3)}
+.ws-dot.connected{background:var(--green)}
+.ws-dot.error{background:var(--red)}
+.topbar-actions{display:flex;gap:8px}
+.main{display:flex;flex:1;overflow:hidden}
+.sidebar{width:220px;background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0}
+.sidebar-section{padding:16px 12px 8px;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.8px}
+.nav-item{display:flex;align-items:center;gap:10px;padding:8px 16px;cursor:pointer;transition:background .15s;font-size:13px;color:var(--text2);border-left:3px solid transparent}
+.nav-item:hover{background:var(--bg3);color:var(--text)}
+.nav-item.active{background:var(--bg3);color:var(--blue);border-left-color:var(--blue)}
+.nav-item .icon{font-size:15px;width:18px;text-align:center}
+.nav-badge{margin-left:auto;background:var(--bg4);border-radius:10px;padding:1px 7px;font-size:11px;font-weight:600;color:var(--text2)}
+.nav-badge.alert{background:rgba(232,93,93,.2);color:var(--red)}
+.sidebar-projects{flex:1;overflow-y:auto;padding-bottom:12px}
+.project-item{padding:7px 16px;cursor:pointer;font-size:12px;color:var(--text2);display:flex;align-items:center;gap:8px;transition:background .15s}
+.project-item:hover{background:var(--bg3);color:var(--text)}
+.project-item.active{color:var(--blue)}
+.project-dot{width:6px;height:6px;border-radius:50%;background:var(--text3);flex-shrink:0}
+.project-item.active .project-dot{background:var(--blue)}
+.content{flex:1;overflow-y:auto;padding:24px}
+.panel{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius2);margin-bottom:20px;overflow:hidden}
+.panel-header{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--border)}
+.panel-title{font-weight:600;font-size:14px;display:flex;align-items:center;gap:8px}
+.panel-body{padding:16px 18px}
+.stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:20px}
+.stat-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius2);padding:16px 18px}
+.stat-label{font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px}
+.stat-value{font-size:28px;font-weight:700;letter-spacing:-1px}
+.stat-value.blue{color:var(--blue)}
+.stat-value.green{color:var(--green)}
+.stat-value.orange{color:var(--orange)}
+.stat-value.red{color:var(--red)}
+.stat-value.purple{color:var(--purple)}
+.stat-sub{font-size:11px;color:var(--text3);margin-top:4px}
+.process-list{display:flex;flex-direction:column;gap:8px}
+.process-item{display:flex;align-items:center;gap:12px;padding:10px 14px;background:var(--bg3);border-radius:var(--radius);border:1px solid var(--border)}
+.process-label{font-weight:600;font-size:13px;flex:1}
+.process-pid{font-size:11px;color:var(--text3);font-family:monospace}
+.process-cpu{font-size:12px;color:var(--orange);min-width:52px;text-align:right}
+.process-mem{font-size:12px;color:var(--cyan);min-width:58px;text-align:right}
+.process-status{font-size:11px;padding:2px 8px;border-radius:4px;background:rgba(62,207,142,.15);color:var(--green)}
+.process-status.sleeping{background:rgba(79,142,247,.1);color:var(--blue)}
+.empty-msg{color:var(--text3);font-size:13px;padding:12px 0;text-align:center}
+.task-table{width:100%;border-collapse:collapse}
+.task-table th{text-align:left;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.6px;padding:8px 12px;border-bottom:1px solid var(--border)}
+.task-table td{padding:10px 12px;border-bottom:1px solid var(--border);font-size:13px;vertical-align:middle}
+.task-table tr:last-child td{border-bottom:none}
+.task-table tr:hover td{background:var(--bg3)}
+.priority-badge{padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.4px}
+.priority-critical{background:rgba(232,93,93,.2);color:var(--red)}
+.priority-high{background:rgba(245,166,35,.2);color:var(--orange)}
+.priority-medium{background:rgba(79,142,247,.15);color:var(--blue)}
+.priority-low{background:rgba(93,100,128,.2);color:var(--text2)}
+.status-badge{padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600}
+.status-open{background:rgba(79,142,247,.15);color:var(--blue)}
+.status-in_progress{background:rgba(245,166,35,.15);color:var(--orange)}
+.status-done{background:rgba(62,207,142,.15);color:var(--green)}
+.status-failed{background:rgba(232,93,93,.2);color:var(--red)}
+.task-title-cell{max-width:260px}
+.task-title-text{font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.task-desc{font-size:11px;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:260px}
+.tag{display:inline-block;padding:1px 6px;border-radius:4px;font-size:10px;background:var(--bg4);color:var(--text2);margin:0 2px}
+.action-btn{padding:4px 10px;border-radius:5px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid var(--border2);background:var(--bg4);color:var(--text2);transition:all .15s}
+.action-btn:hover{background:var(--bg3);color:var(--text)}
+.action-btn.danger:hover{background:rgba(232,93,93,.2);color:var(--red);border-color:var(--red)}
+.action-btn.primary{background:var(--blue2);color:#fff;border-color:var(--blue)}
+.action-btn.primary:hover{background:var(--blue)}
+.loop-item{background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:10px}
+.loop-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.loop-goal{font-weight:600;font-size:13px}
+.loop-meta{font-size:11px;color:var(--text3)}
+.loop-progress{background:var(--bg4);border-radius:4px;height:6px;margin:8px 0;overflow:hidden}
+.loop-progress-bar{height:100%;border-radius:4px;background:var(--blue);transition:width .3s}
+.loop-progress-bar.done{background:var(--green)}
+.loop-progress-bar.failed{background:var(--red)}
+.loop-log{max-height:140px;overflow-y:auto;margin-top:8px}
+.loop-log-entry{font-size:11px;padding:3px 0;border-bottom:1px solid var(--border);display:flex;gap:8px}
+.loop-log-ts{color:var(--text3);flex-shrink:0;font-family:monospace}
+.loop-log-msg{color:var(--text2)}
+.loop-log-entry.error .loop-log-msg{color:var(--red)}
+.loop-log-entry.warn .loop-log-msg{color:var(--orange)}
+.fs-list{max-height:240px;overflow-y:auto;font-family:monospace;font-size:11px}
+.fs-entry{display:flex;gap:10px;padding:4px 0;border-bottom:1px solid var(--border);color:var(--text2)}
+.fs-type{min-width:56px;font-weight:600}
+.fs-type.created{color:var(--green)}
+.fs-type.modified{color:var(--orange)}
+.fs-type.deleted{color:var(--red)}
+.fs-path{color:var(--text3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;z-index:100}
+.modal-overlay.open{display:flex}
+.modal{background:var(--bg2);border:1px solid var(--border2);border-radius:var(--radius2);padding:24px;min-width:420px;max-width:540px;width:100%}
+.modal-title{font-size:16px;font-weight:700;margin-bottom:18px}
+.form-group{margin-bottom:14px}
+.form-label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:6px;display:block}
+.form-input,.form-select,.form-textarea{width:100%;background:var(--bg3);border:1px solid var(--border2);border-radius:6px;padding:8px 12px;color:var(--text);font-size:13px;font-family:var(--font);outline:none;transition:border .15s}
+.form-input:focus,.form-select:focus,.form-textarea:focus{border-color:var(--blue)}
+.form-textarea{min-height:80px;resize:vertical}
+.modal-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:20px}
+.btn{padding:8px 18px;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;border:1px solid var(--border2);background:var(--bg4);color:var(--text);transition:all .15s}
+.btn:hover{background:var(--bg3)}
+.btn-primary{background:var(--blue2);color:#fff;border-color:var(--blue)}
+.btn-primary:hover{background:var(--blue)}
+#toast-container{position:fixed;bottom:24px;right:24px;display:flex;flex-direction:column;gap:8px;z-index:200}
+.toast{padding:10px 16px;border-radius:8px;font-size:13px;font-weight:500;background:var(--bg3);border:1px solid var(--border2);color:var(--text);animation:slidein .2s ease;max-width:320px}
+.toast.success{border-color:var(--green);color:var(--green)}
+.toast.error{border-color:var(--red);color:var(--red)}
+@keyframes slidein{from{transform:translateX(40px);opacity:0}to{transform:translateX(0);opacity:1}}
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:var(--bg2)}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:4px}
+::-webkit-scrollbar-thumb:hover{background:var(--text3)}
+.settings-row{display:flex;align-items:center;gap:16px;padding:10px 0;border-bottom:1px solid var(--border)}
+.settings-row:last-child{border-bottom:none}
+.settings-label{min-width:180px;font-size:13px;color:var(--text2)}
+.settings-proj-block{background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;margin-bottom:14px}
+.settings-proj-title{font-size:13px;font-weight:600;margin-bottom:10px}
+.toggle-label{position:relative;display:inline-flex;align-items:center;cursor:pointer}
+.toggle-label input{opacity:0;width:0;height:0;position:absolute}
+.toggle-slider{width:36px;height:20px;background:var(--bg4);border-radius:10px;border:1px solid var(--border2);transition:background .2s;flex-shrink:0}
+.toggle-slider::after{content:'';position:absolute;width:14px;height:14px;border-radius:50%;background:#fff;top:3px;left:3px;transition:left .2s}
+.toggle-label input:checked+.toggle-slider{background:var(--blue);border-color:var(--blue)}
+.toggle-label input:checked+.toggle-slider::after{left:19px}
+.con-row{display:flex;gap:10px;padding:4px 16px;border-bottom:1px solid var(--border);align-items:flex-start}
+.con-row:hover{background:var(--bg3)}
+.con-ts{color:var(--text3);font-size:11px;min-width:75px;flex-shrink:0;padding-top:1px}
+.con-lvl{font-size:11px;font-weight:700;min-width:44px;flex-shrink:0;padding-top:1px}
+.con-msg{font-size:12px;color:var(--text);white-space:pre-wrap;word-break:break-all}
+.mcp-group{border-bottom:1px solid var(--border)}
+.mcp-group:last-child{border-bottom:none}
+.mcp-group-header{display:flex;align-items:center;gap:10px;padding:10px 18px;background:var(--bg3);border-bottom:1px solid var(--border)}
+.mcp-group-name{font-size:12px;color:var(--text2);font-family:monospace}
+.mcp-scope-badge{font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;letter-spacing:.5px}
+.mcp-scope-badge.global{background:rgba(79,142,247,.15);color:var(--blue)}
+.mcp-scope-badge.local{background:rgba(167,139,250,.15);color:var(--purple)}
+.mcp-row{display:flex;align-items:center;justify-content:space-between;padding:10px 18px;border-bottom:1px solid var(--border);transition:background .1s}
+.mcp-row:hover{background:var(--bg3)}
+.mcp-row:last-child{border-bottom:none}
+.mcp-row.mcp-dup{opacity:.7}
+.mcp-left{display:flex;align-items:center;gap:12px;min-width:0;flex:1}
+.mcp-right{display:flex;align-items:center;gap:10px;flex-shrink:0}
+.mcp-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.mcp-dot.healthy{background:var(--green)}
+.mcp-dot.error{background:var(--red)}
+.mcp-dot.unknown{background:var(--text3)}
+.mcp-name{font-size:13px;font-weight:600;color:var(--text)}
+.mcp-cmd{font-size:11px;color:var(--text3);font-family:monospace;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:420px}
+.mcp-type-badge{font-size:10px;font-weight:600;padding:2px 6px;border-radius:4px;background:var(--bg4);color:var(--text3);text-transform:uppercase}
+.mcp-status-text{font-size:11px;font-weight:600}
+.mcp-status-text.healthy{color:var(--green)}
+.mcp-status-text.error,.mcp-status-text.failed{color:var(--red)}
+.mcp-status-text.unknown{color:var(--text3)}
+.mcp-dup-badge{font-size:10px;background:rgba(245,166,35,.15);color:var(--orange);padding:1px 5px;border-radius:3px;margin-left:6px;font-weight:600}
+.brain-status{font-size:12px;font-family:monospace;padding:3px 8px;border-radius:4px}
+.brain-status.ok{color:var(--green);background:rgba(62,207,142,.1)}
+.brain-status.fail{color:var(--red);background:rgba(232,93,93,.1)}
+.roadmap-card{background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;transition:border-color .15s}
+.roadmap-card:hover{border-color:var(--border2)}
+.roadmap-card-title{font-size:13px;font-weight:600;margin-bottom:6px;color:var(--text)}
+.roadmap-card-desc{font-size:12px;color:var(--text2);line-height:1.6}
+@media(max-width:900px){.stats-row{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:680px){.sidebar{display:none}}
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="topbar">
+    <div class="topbar-logo">
+      <div class="dot"></div>LoopEngineering
+    </div>
+    <div class="ws-badge">
+      <div class="ws-dot" id="ws-dot"></div>
+      <span id="ws-label">Connecting…</span>
+    </div>
+    <div class="topbar-actions">
+      <button class="btn" id="theme-btn" onclick="toggleTheme()" title="Toggle light/dark">☀</button>
+      <button class="btn" onclick="openModal('project-modal')">+ Project</button>
+      <button class="btn btn-primary" onclick="openModal('task-modal')">+ Task</button>
+    </div>
+  </div>
+  <div class="main">
+    <div class="sidebar">
+      <div class="sidebar-section">Views</div>
+      <div class="nav-item active" onclick="setView('overview')" data-view="overview"><span class="icon">⬡</span>Overview</div>
+      <div class="nav-item" onclick="setView('processes')" data-view="processes"><span class="icon">◎</span>AI Processes<span class="nav-badge" id="proc-badge">0</span></div>
+      <div class="nav-item" onclick="setView('tasks')" data-view="tasks"><span class="icon">✦</span>All Tasks<span class="nav-badge" id="task-badge">0</span></div>
+      <div class="nav-item" onclick="setView('loops')" data-view="loops"><span class="icon">↻</span>Loops<span class="nav-badge" id="loop-badge">0</span></div>
+      <div class="nav-item" onclick="setView('activity')" data-view="activity"><span class="icon">≋</span>Activity</div>
+      <div class="nav-item" onclick="setView('roadmap')" data-view="roadmap"><span class="icon">🗺</span>Roadmap</div>
+      <div class="nav-item" onclick="setView('settings')" data-view="settings"><span class="icon">⚙</span>Settings</div>
+      <div class="nav-item" onclick="setView('mcp')" data-view="mcp"><span class="icon">⬡</span>MCP<span class="nav-badge" id="mcp-badge">0</span></div>
+      <div class="nav-item" onclick="setView('console')" data-view="console"><span class="icon">⬛</span>Console</div>
+      <div class="sidebar-section">Projects</div>
+      <div class="sidebar-projects" id="project-nav"></div>
+    </div>
+    <div class="content" id="content"></div>
+  </div>
+</div>
+
+<!-- Add Project Modal -->
+<div class="modal-overlay" id="project-modal">
+  <div class="modal">
+    <div class="modal-title">Add Project</div>
+    <div class="form-group">
+      <label class="form-label">Folder Path</label>
+      <input class="form-input" id="proj-folder" placeholder="/Users/you/Projects/my-app"/>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Name (optional)</label>
+      <input class="form-input" id="proj-name" placeholder="My App"/>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('project-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="submitProject()">Add Project</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add Task Modal -->
+<div class="modal-overlay" id="task-modal">
+  <div class="modal">
+    <div class="modal-title">New Task</div>
+    <div class="form-group">
+      <label class="form-label">Project</label>
+      <select class="form-select" id="task-project"></select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Title</label>
+      <input class="form-input" id="task-title" placeholder="Fix login bug"/>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Description</label>
+      <textarea class="form-textarea" id="task-desc" placeholder="What needs to be done…"></textarea>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Priority</label>
+      <select class="form-select" id="task-priority">
+        <option value="critical">Critical</option>
+        <option value="high">High</option>
+        <option value="medium" selected>Medium</option>
+        <option value="low">Low</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Tags (comma separated)</label>
+      <input class="form-input" id="task-tags" placeholder="bug, auth, backend"/>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('task-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="submitTask()">Create Task</button>
+    </div>
+  </div>
+</div>
+
+<!-- Loop Modal -->
+<div class="modal-overlay" id="loop-modal">
+  <div class="modal">
+    <div class="modal-title">Start Loop</div>
+    <div class="form-group">
+      <label class="form-label">Task</label>
+      <input class="form-input" id="loop-task-display" readonly/>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Goal — what does "done" look like?</label>
+      <textarea class="form-textarea" id="loop-goal" placeholder="All tests pass and the endpoint returns 200"></textarea>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Max Iterations</label>
+      <input class="form-input" type="number" id="loop-max" value="10" min="1" max="100"/>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('loop-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="submitLoop()">Start Loop</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast-container"></div>
+
+<script>
+const S={projects:[],tasks:[],loops:[],processes:[],fsEvents:[],mcpServers:[],settings:{},activeView:'overview',activeProject:null};
+let ws=null,reconnectTimer=null,_loopTaskId=null;
+
+function connectWS(){
+  ws=new WebSocket('ws://'+location.host+'/ws');
+  ws.onopen=()=>{setWS('connected');if(reconnectTimer){clearTimeout(reconnectTimer);reconnectTimer=null;}};
+  ws.onmessage=e=>handleEvent(JSON.parse(e.data));
+  ws.onerror=()=>setWS('error');
+  ws.onclose=()=>{setWS('disconnected');reconnectTimer=setTimeout(connectWS,3000);};
+}
+
+function setWS(s){
+  document.getElementById('ws-dot').className='ws-dot'+(s==='connected'?' connected':s==='error'?' error':'');
+  document.getElementById('ws-label').textContent=s==='connected'?'Live':s==='error'?'Error':'Reconnecting…';
+}
+
+function handleEvent(ev){
+  switch(ev.type){
+    case 'snapshot':S.projects=ev.data.projects||[];S.tasks=ev.data.tasks||[];S.loops=ev.data.loops||[];S.processes=ev.data.processes||[];S.settings=ev.data.settings||{};break;
+    case 'project_updated':upsert(S.projects,ev.data);break;
+    case 'task_created':case 'task_updated':upsert(S.tasks,ev.data);break;
+    case 'loop_created':upsert(S.loops,ev.data);break;
+    case 'loop_log':{const l=S.loops.find(x=>x.id===ev.loop_id);if(l){l.log=[...(l.log||[]),ev.entry];l.iteration=(l.iteration||0)+1;}break;}
+    case 'loop_finished':{const l=S.loops.find(x=>x.id===ev.loop_id);if(l)l.status=ev.status;break;}
+    case 'processes_updated':S.processes=ev.data;break;
+    case 'settings_updated':S.settings=ev.data;break;
+    case 'fs_event':S.fsEvents.unshift({...ev,ts:new Date().toLocaleTimeString()});if(S.fsEvents.length>200)S.fsEvents=S.fsEvents.slice(0,200);break;
+  }
+  render();
+}
+
+function upsert(arr,item){const i=arr.findIndex(x=>x.id===item.id);if(i>=0)arr[i]=item;else arr.unshift(item);}
+
+async function api(method,path,body){
+  const opts={method,headers:{'Content-Type':'application/json'}};
+  if(body)opts.body=JSON.stringify(body);
+  const r=await fetch('/api'+path,opts);
+  if(!r.ok){const e=await r.json().catch(()=>({detail:'Error'}));throw new Error(e.detail||r.statusText);}
+  return r.json();
+}
+
+function render(){
+  renderSidebar();renderBadges();
+  const c=document.getElementById('content');
+  if(S.activeView==='overview')c.innerHTML=renderOverview();
+  else if(S.activeView==='processes')c.innerHTML=renderProcesses();
+  else if(S.activeView==='tasks')c.innerHTML=renderTasks(S.tasks);
+  else if(S.activeView==='loops')c.innerHTML=renderLoops();
+  else if(S.activeView==='activity')c.innerHTML=renderActivity();
+  else if(S.activeView==='roadmap')c.innerHTML=renderRoadmap();
+  else if(S.activeView==='settings')c.innerHTML=renderSettings();
+  else if(S.activeView==='mcp')c.innerHTML=renderMCP();
+  else if(S.activeView==='console')c.innerHTML=renderConsole();
+  else if(S.activeView.startsWith('project:')){
+    const pid=S.activeView.slice(8);
+    c.innerHTML=renderProject(pid,S.tasks.filter(t=>t.project_id===pid&&t.status!=='deleted'));
+  }
+}
+
+function renderSidebar(){
+  document.getElementById('project-nav').innerHTML=S.projects.map(p=>`
+    <div class="project-item ${S.activeView==='project:'+p.id?'active':''}" onclick="setView('project:${p.id}')">
+      <div class="project-dot"></div>
+      <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${x(p.name)}</span>
+    </div>`).join('')||'<div style="padding:8px 16px;font-size:11px;color:var(--text3)">No projects</div>';
+  document.querySelectorAll('.nav-item[data-view]').forEach(el=>el.classList.toggle('active',el.dataset.view===S.activeView));
+}
+
+function renderBadges(){
+  document.getElementById('proc-badge').textContent=S.processes.length;
+  document.getElementById('task-badge').textContent=S.tasks.filter(t=>t.status!=='deleted'&&t.status!=='done').length;
+  document.getElementById('loop-badge').textContent=S.loops.filter(l=>l.status==='running').length;
+}
+
+function renderOverview(){
+  const open=S.tasks.filter(t=>t.status==='open').length;
+  const prog=S.tasks.filter(t=>t.status==='in_progress').length;
+  const done=S.tasks.filter(t=>t.status==='done').length;
+  const crit=S.tasks.filter(t=>t.priority==='critical'&&!['done','deleted'].includes(t.status)).length;
+  const running=S.loops.filter(l=>l.status==='running');
+  return `
+    <div class="stats-row">
+      <div class="stat-card"><div class="stat-label">AI Processes</div><div class="stat-value blue">${S.processes.length}</div><div class="stat-sub">${S.processes.map(p=>p.label).join(', ')||'none detected'}</div></div>
+      <div class="stat-card"><div class="stat-label">Open Tasks</div><div class="stat-value orange">${open+prog}</div><div class="stat-sub">${prog} in progress</div></div>
+      <div class="stat-card"><div class="stat-label">Done</div><div class="stat-value green">${done}</div><div class="stat-sub">${S.tasks.length} total</div></div>
+      <div class="stat-card"><div class="stat-label">Critical</div><div class="stat-value ${crit>0?'red':'green'}">${crit}</div><div class="stat-sub">need attention</div></div>
+    </div>
+    <div class="panel">
+      <div class="panel-header"><div class="panel-title">◎ AI Processes</div><span style="font-size:11px;color:var(--text3)">refreshes every 5s</span></div>
+      <div class="panel-body">${renderProcList()}</div>
+    </div>
+    ${running.length?`<div class="panel"><div class="panel-header"><div class="panel-title">↻ Running Loops (${running.length})</div></div><div class="panel-body">${running.map(loopCard).join('')}</div></div>`:''}
+    <div class="panel">
+      <div class="panel-header"><div class="panel-title">✦ High Priority</div><button class="action-btn primary" onclick="openModal('task-modal')">+ Task</button></div>
+      <div class="panel-body" style="padding:0">${taskTable(S.tasks.filter(t=>['critical','high'].includes(t.priority)&&!['done','deleted'].includes(t.status)).slice(0,8))}</div>
+    </div>
+    <div class="panel">
+      <div class="panel-header"><div class="panel-title">≋ Recent Activity</div></div>
+      <div class="panel-body">${fsList(20)}</div>
+    </div>`;
+}
+
+function renderProcesses(){
+  return `<div class="panel"><div class="panel-header"><div class="panel-title">◎ AI Processes</div></div><div class="panel-body">${renderProcList()}</div></div>
+  <div class="panel"><div class="panel-header"><div class="panel-title">Detected Tools</div></div><div class="panel-body"><p style="font-size:12px;color:var(--text2);line-height:2">Claude Desktop · Claude Code · Cursor · GitHub Copilot · Continue · Ollama · LM Studio · Aider · Cody</p></div></div>`;
+}
+
+function renderProcList(){
+  if(!S.processes.length)return '<div class="empty-msg">No AI processes detected</div>';
+  return `<div class="process-list">${S.processes.map(p=>`
+    <div class="process-item">
+      <div class="process-label">${x(p.label)}</div>
+      <span class="process-pid">PID ${p.pid}</span>
+      <span class="process-cpu">${p.cpu_pct.toFixed(1)}% CPU</span>
+      <span class="process-mem">${p.mem_mb} MB</span>
+      <span class="process-status ${p.status}">${p.status}</span>
+    </div>`).join('')}</div>`;
+}
+
+function renderTasks(tasks){
+  const vis=tasks.filter(t=>t.status!=='deleted');
+  return `<div class="panel"><div class="panel-header"><div class="panel-title">✦ All Tasks (${vis.length})</div><button class="action-btn primary" onclick="openModal('task-modal')">+ Task</button></div><div class="panel-body" style="padding:0">${taskTable(vis)}</div></div>`;
+}
+
+function renderProject(pid,tasks){
+  const p=S.projects.find(q=>q.id===pid);
+  if(!p)return '<div class="empty-msg">Project not found</div>';
+  const lps=S.loops.filter(l=>{const t=S.tasks.find(q=>q.id===l.task_id);return t&&t.project_id===pid;});
+  return `<div style="margin-bottom:20px"><h2 style="font-size:20px;font-weight:700">${x(p.name)}</h2><div style="font-size:12px;color:var(--text3);margin-top:4px;font-family:monospace">${x(p.folder)}</div></div>
+  <div class="stats-row">
+    <div class="stat-card"><div class="stat-label">Tasks</div><div class="stat-value blue">${tasks.length}</div></div>
+    <div class="stat-card"><div class="stat-label">In Progress</div><div class="stat-value orange">${tasks.filter(t=>t.status==='in_progress').length}</div></div>
+    <div class="stat-card"><div class="stat-label">Done</div><div class="stat-value green">${tasks.filter(t=>t.status==='done').length}</div></div>
+    <div class="stat-card"><div class="stat-label">Loops</div><div class="stat-value purple">${lps.length}</div></div>
+  </div>
+  <div class="panel"><div class="panel-header"><div class="panel-title">✦ Tasks</div><button class="action-btn primary" onclick="openTaskFor('${pid}')">+ Task</button></div><div class="panel-body" style="padding:0">${taskTable(tasks)}</div></div>
+  ${lps.length?`<div class="panel"><div class="panel-header"><div class="panel-title">↻ Loops</div></div><div class="panel-body">${lps.map(loopCard).join('')}</div></div>`:''}`;
+}
+
+function renderLoops(){
+  return `<div class="panel"><div class="panel-header"><div class="panel-title">↻ All Loops (${S.loops.length})</div></div><div class="panel-body">${S.loops.length?S.loops.map(loopCard).join(''):'<div class="empty-msg">No loops yet — start one from a task</div>'}</div></div>`;
+}
+
+function renderActivity(){
+  return `<div class="panel"><div class="panel-header"><div class="panel-title">≋ Filesystem Activity</div></div><div class="panel-body">${fsList(100)}</div></div>`;
+}
+
+function renderRoadmap(){
+  const phases=[
+    {
+      phase:'Phase 1 — Agents & Sub-Agents',color:'blue',status:'planned',
+      items:[
+        {title:'Agent Registry',desc:'Register named agents (Claude Code, Cursor, Aider, etc.) with roles, capabilities, and health status.'},
+        {title:'Sub-Agent Trees',desc:'Spawn child agents from a parent task. Visualize agent hierarchy as collapsible tree in dashboard.'},
+        {title:'Agent Orchestrator',desc:'Route tasks to best-fit agent based on type, load, and priority. Retry failed agents with fallback.'},
+        {title:'Inter-Agent Messaging',desc:'Pub/sub bus for agents to pass results, context, and status updates to each other.'},
+        {title:'Agent Loop Delegation',desc:'Any agent can create, assign, and monitor loops on behalf of other agents.'},
+      ]
+    },
+    {
+      phase:'Phase 2 — Multi-Brain AI Connections',color:'purple',status:'planned',
+      items:[
+        {title:'OpenAI GPT-4o / o3',desc:'Connect via OpenAI API. Route reasoning-heavy tasks to o3, fast tasks to GPT-4o-mini.'},
+        {title:'Google Gemini 2.0 / 2.5 Pro',desc:'Gemini Flash for speed, Pro for deep reasoning. Multimodal inputs (image, video, docs).'},
+        {title:'xAI Grok 3',desc:'Real-time X/Twitter data access. Use for trend monitoring, live research tasks.'},
+        {title:'DeepSeek R2 / Coder',desc:'Open-weight model for code-heavy loops. Self-hosted option via Ollama integration.'},
+        {title:'Anthropic Claude (all tiers)',desc:'Sonnet 4.6, Opus 4.8, Haiku 4.5. Auto-select tier by task complexity and token budget.'},
+        {title:'Brain Selector UI',desc:'Per-task and per-agent brain picker. Cost estimate shown before dispatch. Fallback chain configurable.'},
+        {title:'Unified Context Protocol',desc:'MCP-compatible context passing across all brains. Share files, tool results, memory across providers.'},
+      ]
+    },
+    {
+      phase:'Phase 3 — Integrations',color:'cyan',status:'planned',
+      items:[
+        {title:'GitHub / GitLab',desc:'Auto-create issues from tasks. Link PRs to loops. Sync task status with issue state.'},
+        {title:'Jira / Linear',desc:'Bidirectional sync. Pull sprint backlog in. Push loop results as comments.'},
+        {title:'Slack / Discord',desc:'Notify channels on loop finish, critical task alerts, agent failures. Accept commands via bot.'},
+        {title:'Notion / Obsidian',desc:'Export task notes to pages. Import Notion databases as project sources.'},
+        {title:'VS Code / Cursor Extension',desc:'Sidebar panel showing live tasks and loops. Click to jump to file from loop log.'},
+        {title:'Webhook Ingress',desc:'Any external system can POST task/loop updates. Signed payloads with replay protection.'},
+        {title:'Calendar (Google/Outlook)',desc:'Schedule tasks and loops as time-blocked calendar events. Deadline tracking.'},
+        {title:'Email Digest',desc:'Daily/weekly summary of all loop outcomes, blocked tasks, and AI usage stats.'},
+      ]
+    },
+    {
+      phase:'Phase 4 — Intelligence Layer',color:'orange',status:'future',
+      items:[
+        {title:'Cross-Brain Memory',desc:'Vector store shared across all AI brains. Embeddings from any provider, queried by all agents.'},
+        {title:'Task Auto-Decomposition',desc:'Drop a goal; system breaks it into subtasks, assigns agents, estimates complexity and cost.'},
+        {title:'Cost & Token Dashboard',desc:'Per-brain spend tracking. Budget caps per project. Alert when approaching limits.'},
+        {title:'Loop Replay & Diff',desc:'Compare two loop runs side-by-side. Diff outputs to detect regressions or improvements.'},
+        {title:'Agent Eval Harness',desc:'Run benchmark tasks against multiple brains. Score and rank by quality, speed, cost.'},
+        {title:'Self-Healing Loops',desc:'Detect stuck/failed loops, auto-restart with adjusted parameters or switched brain.'},
+      ]
+    },
+  ];
+  const statusColor={planned:'blue',future:'purple',wip:'orange',done:'green'};
+  const phaseHTML=phases.map(ph=>`
+    <div class="panel" style="margin-bottom:24px">
+      <div class="panel-header">
+        <div class="panel-title" style="gap:10px">
+          <span style="color:var(--${ph.color})">${ph.phase}</span>
+        </div>
+        <span class="status-badge" style="background:rgba(var(--${ph.color}-rgb,79,142,247),.15);color:var(--${ph.color})">${ph.status}</span>
+      </div>
+      <div class="panel-body" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px">
+        ${ph.items.map(item=>`
+          <div class="roadmap-card">
+            <div class="roadmap-card-title">${item.title}</div>
+            <div class="roadmap-card-desc">${item.desc}</div>
+          </div>`).join('')}
+      </div>
+    </div>`).join('');
+  return `
+    <div style="margin-bottom:20px">
+      <h2 style="font-size:20px;font-weight:700">🗺 Roadmap — Future Scope</h2>
+      <p style="font-size:13px;color:var(--text2);margin-top:6px">Planned expansion: agents, multi-brain AI, integrations, intelligence layer.</p>
+    </div>
+    ${phaseHTML}`;
+}
+
+function loopCard(l){
+  const pct=l.max_iterations>0?Math.min(100,Math.round(l.iteration/l.max_iterations*100)):0;
+  const bc=l.status==='done'?'done':l.status==='failed'?'failed':'';
+  const t=S.tasks.find(q=>q.id===l.task_id);
+  const logs=(l.log||[]).slice(-6);
+  return `<div class="loop-item">
+    <div class="loop-header">
+      <div><div class="loop-goal">${x(l.goal)}</div>${t?`<div class="loop-meta">Task: ${x(t.title)}</div>`:''}</div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <span class="status-badge status-${l.status}">${l.status}</span>
+        <span class="loop-meta">${l.iteration}/${l.max_iterations}</span>
+        ${l.status==='running'?`<button class="action-btn danger" onclick="finishLoop('${l.id}','failed')">Stop</button><button class="action-btn" onclick="finishLoop('${l.id}','done')">Done</button>`:''}
+      </div>
+    </div>
+    <div class="loop-progress"><div class="loop-progress-bar ${bc}" style="width:${pct}%"></div></div>
+    ${logs.length?`<div class="loop-log">${logs.map(e=>`<div class="loop-log-entry ${e.level||''}"><span class="loop-log-ts">${(e.ts||'').slice(11,19)}</span><span class="loop-log-msg">${x(e.msg)}</span></div>`).join('')}</div>`:''}
+  </div>`;
+}
+
+function taskTable(tasks){
+  if(!tasks.length)return '<div class="empty-msg">No tasks</div>';
+  return `<table class="task-table"><thead><tr><th>Title</th><th>Status</th><th>Priority</th><th>Tags</th><th>Notes</th><th>Actions</th></tr></thead><tbody>
+    ${tasks.map(t=>`<tr>
+      <td class="task-title-cell"><div class="task-title-text">${x(t.title)}</div>${t.description?`<div class="task-desc">${x(t.description)}</div>`:''}</td>
+      <td><span class="status-badge status-${t.status}">${t.status}</span></td>
+      <td><span class="priority-badge priority-${t.priority}">${t.priority}</span></td>
+      <td>${(t.tags||[]).map(g=>`<span class="tag">${x(g)}</span>`).join('')}</td>
+      <td>${t.notes_path?`<span class="tag" title="${x(t.notes_path)}">📝 notes</span>`:''}</td>
+      <td style="display:flex;gap:4px;flex-wrap:wrap">
+        ${t.status!=='done'?`<button class="action-btn" onclick="markDone('${t.id}')">Done</button>`:''}
+        ${!['in_progress','done'].includes(t.status)?`<button class="action-btn primary" onclick="startLoop('${t.id}','${x(t.title)}')">Loop</button>`:''}
+        <button class="action-btn danger" onclick="deleteTask('${t.id}')">Del</button>
+      </td>
+    </tr>`).join('')}
+  </tbody></table>`;
+}
+
+function fsList(max){
+  const ev=S.fsEvents.slice(0,max);
+  if(!ev.length)return '<div class="empty-msg">No filesystem events — add a project to watch</div>';
+  return `<div class="fs-list">${ev.map(e=>`<div class="fs-entry"><span class="fs-type ${e.event_type}">${e.event_type}</span><span style="color:var(--text3);min-width:70px">${e.ts||''}</span><span class="fs-path">${x(e.path||'')}</span></div>`).join('')}</div>`;
+}
+
+function setView(v){S.activeView=v;render();}
+function openModal(id){if(id==='task-modal')fillProjects();document.getElementById(id).classList.add('open');}
+function closeModal(id){document.getElementById(id).classList.remove('open');}
+function fillProjects(pre){
+  document.getElementById('task-project').innerHTML=S.projects.map(p=>`<option value="${p.id}" ${p.id===pre?'selected':''}>${x(p.name)}</option>`).join('');
+}
+function openTaskFor(pid){fillProjects(pid);document.getElementById('task-modal').classList.add('open');}
+
+async function submitProject(){
+  const folder=document.getElementById('proj-folder').value.trim();
+  const name=document.getElementById('proj-name').value.trim();
+  if(!folder){toast('Enter a folder path','error');return;}
+  try{const p=await api('POST','/projects',{folder,name:name||undefined});upsert(S.projects,p);closeModal('project-modal');document.getElementById('proj-folder').value='';document.getElementById('proj-name').value='';toast('Project added');render();}
+  catch(e){toast(e.message,'error');}
+}
+
+async function submitTask(){
+  const project_id=document.getElementById('task-project').value;
+  const title=document.getElementById('task-title').value.trim();
+  const description=document.getElementById('task-desc').value.trim();
+  const priority=document.getElementById('task-priority').value;
+  const tags=document.getElementById('task-tags').value.split(',').map(s=>s.trim()).filter(Boolean);
+  if(!title){toast('Enter a title','error');return;}
+  if(!project_id){toast('Select a project','error');return;}
+  try{const t=await api('POST','/tasks',{project_id,title,description,priority,tags});upsert(S.tasks,t);closeModal('task-modal');['task-title','task-desc','task-tags'].forEach(id=>document.getElementById(id).value='');toast('Task created — notes generated');render();}
+  catch(e){toast(e.message,'error');}
+}
+
+function startLoop(taskId,taskTitle){
+  _loopTaskId=taskId;
+  document.getElementById('loop-task-display').value=taskTitle;
+  document.getElementById('loop-goal').value='';
+  document.getElementById('loop-max').value='10';
+  document.getElementById('loop-modal').classList.add('open');
+}
+
+async function submitLoop(){
+  const goal=document.getElementById('loop-goal').value.trim();
+  const max_iterations=parseInt(document.getElementById('loop-max').value,10)||10;
+  if(!goal){toast('Enter a goal','error');return;}
+  try{const l=await api('POST','/loops',{task_id:_loopTaskId,goal,max_iterations});upsert(S.loops,l);closeModal('loop-modal');toast('Loop started');render();}
+  catch(e){toast(e.message,'error');}
+}
+
+async function finishLoop(id,status){
+  try{await api('POST',`/loops/${id}/finish?status=${status}`);const l=S.loops.find(q=>q.id===id);if(l)l.status=status;toast(status==='done'?'Loop done':'Loop stopped');render();}
+  catch(e){toast(e.message,'error');}
+}
+
+async function markDone(id){
+  try{const t=await api('PATCH',`/tasks/${id}`,{status:'done'});upsert(S.tasks,t);toast('Done');render();}
+  catch(e){toast(e.message,'error');}
+}
+
+async function deleteTask(id){
+  try{await api('DELETE',`/tasks/${id}`);const t=S.tasks.find(q=>q.id===id);if(t)t.status='deleted';toast('Deleted');render();}
+  catch(e){toast(e.message,'error');}
+}
+
+function x(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function toast(msg,type='success'){const el=document.createElement('div');el.className='toast '+type;el.textContent=msg;document.getElementById('toast-container').appendChild(el);setTimeout(()=>el.remove(),3500);}
+
+document.querySelectorAll('.modal-overlay').forEach(o=>o.addEventListener('click',e=>{if(e.target===o)o.classList.remove('open');}));
+
+// ── Console log capture ───────────────────────────────────────────────────────
+const _consoleLogs=[];
+(function(){
+  const orig={log:console.log,warn:console.warn,error:console.error,info:console.info};
+  ['log','warn','error','info'].forEach(lvl=>{
+    console[lvl]=function(...args){
+      orig[lvl](...args);
+      const msg=args.map(a=>{try{return typeof a==='object'?JSON.stringify(a,null,2):String(a);}catch(e){return String(a);}}).join(' ');
+      _consoleLogs.unshift({ts:new Date().toLocaleTimeString(),level:lvl,msg});
+      if(_consoleLogs.length>500)_consoleLogs.length=500;
+      if(S.activeView==='console')render();
+    };
+  });
+  window.addEventListener('error',e=>{
+    _consoleLogs.unshift({ts:new Date().toLocaleTimeString(),level:'error',msg:e.message+' ('+e.filename+':'+e.lineno+')'});
+    if(S.activeView==='console')render();
+  });
+})();
+
+function renderMCP(){
+  const servers=S.mcpServers||[];
+  if(!servers.length)return `<div class="panel">
+    <div class="panel-header"><div class="panel-title">⬡ MCP Servers</div><button class="btn" onclick="refreshMCP()">↻ Scan</button></div>
+    <div class="panel-body"><div class="empty-msg">No MCP servers found — click Scan</div></div>
+  </div>`;
+
+  // Group by source
+  const groups={};
+  servers.forEach(s=>{
+    const g=s.source||'unknown';
+    if(!groups[g])groups[g]=[];
+    groups[g].push(s);
+  });
+
+  const healthyCount=servers.filter(s=>s.status==='healthy').length;
+  const unknownCount=servers.filter(s=>s.status==='unknown').length;
+
+  const statusDot=s=>{
+    if(s.status==='healthy')return '<span class="mcp-dot healthy"></span>';
+    if(s.status==='error'||s.status==='failed')return '<span class="mcp-dot error"></span>';
+    return '<span class="mcp-dot unknown"></span>';
+  };
+
+  const groupBlocks=Object.entries(groups).map(([grp,svrs])=>{
+    const isGlobal=grp.startsWith('global');
+    const rows=svrs.map(s=>`
+      <div class="mcp-row ${s.duplicate?'mcp-dup':''}">
+        <div class="mcp-left">
+          ${statusDot(s)}
+          <div>
+            <div class="mcp-name">${x(s.name)}${s.duplicate?'<span class="mcp-dup-badge">override</span>':''}</div>
+            <div class="mcp-cmd">${x(s.type==='http'?s.command:(s.command+' '+(s.args||[]).join(' ')).trim().slice(0,90))}</div>
+          </div>
+        </div>
+        <div class="mcp-right">
+          <span class="mcp-type-badge">${x(s.type)}</span>
+          <span class="mcp-status-text ${s.status}">${s.status}</span>
+          ${s.failure_count>0?`<span style="color:var(--red);font-size:11px">${s.failure_count} fail</span>`:''}
+          ${s.last_error?`<span title="${x(s.last_error)}" style="cursor:help;color:var(--orange);font-size:11px">⚠ err</span>`:''}
+          <label class="toggle-label" title="${s.disabled?'Enable':'Disable'} this MCP server">
+            <input type="checkbox" ${s.disabled?'':'checked'} onchange="toggleMCP('${x(s.name)}','${x(s.source_file)}',this.checked)">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+      </div>`).join('');
+    return `<div class="mcp-group">
+      <div class="mcp-group-header">
+        <span class="mcp-scope-badge ${isGlobal?'global':'local'}">${isGlobal?'GLOBAL':'LOCAL'}</span>
+        <span class="mcp-group-name">${x(grp.replace(/^(global|local): /,''))}</span>
+        <span style="margin-left:auto;font-size:11px;color:var(--text3)">${svrs.length} server${svrs.length>1?'s':''}</span>
+      </div>
+      ${rows}
+    </div>`;
+  }).join('');
+
+  return `
+    <div style="margin-bottom:20px;display:flex;align-items:center;justify-content:space-between">
+      <div>
+        <h2 style="font-size:20px;font-weight:700">⬡ MCP Servers</h2>
+        <p style="font-size:13px;color:var(--text2);margin-top:4px">${servers.length} servers · <span style="color:var(--green)">${healthyCount} healthy</span> · <span style="color:var(--text3)">${unknownCount} unknown</span></p>
+      </div>
+      <button class="btn" onclick="refreshMCP()">↻ Rescan</button>
+    </div>
+    <div class="panel">
+      <div class="panel-body" style="padding:0">${groupBlocks}</div>
+    </div>`;
+}
+
+function renderConsole(){
+  const lvlColor={log:'var(--text2)',info:'var(--blue)',warn:'var(--orange)',error:'var(--red)'};
+  const rows=_consoleLogs.map(e=>`<div class="con-row"><span class="con-ts">${e.ts}</span><span class="con-lvl" style="color:${lvlColor[e.level]||'var(--text2)'}">${e.level.toUpperCase()}</span><span class="con-msg">${x(e.msg)}</span></div>`).join('');
+  return `<div class="panel">
+    <div class="panel-header"><div class="panel-title">⬛ Browser Console</div><button class="btn" onclick="_consoleLogs.length=0;render()">Clear</button></div>
+    <div class="panel-body" style="padding:0;max-height:70vh;overflow-y:auto;font-family:monospace;font-size:12px">
+      ${rows||'<div class="empty-msg">No logs yet</div>'}
+    </div>
+  </div>`;
+}
+
+// ── Settings ──────────────────────────────────────────────────────────────────
+function renderSettings(){
+  const g=S.settings&&S.settings.global||{};
+  const brains=g.ai_brains||{};
+  const integrations=g.integrations||{};
+
+  const toggle=(path,val)=>`<label class="toggle-label"><input type="checkbox" onchange="patchGlobal('${path}',this.checked)" ${val?'checked':''}><span class="toggle-slider"></span></label>`;
+  const textInput=(path,val,ph='')=>`<input class="form-input" style="width:100%" value="${x(String(val||''))}" placeholder="${x(ph)}" onchange="patchGlobal('${path}',this.value)">`;
+
+  const brainRows=Object.entries(brains).map(([k,b])=>`
+    <div class="settings-row brain-row" id="brain-row-${k}">
+      <div class="settings-label"><strong style="text-transform:capitalize">${k}</strong></div>
+      <div style="display:flex;align-items:center;gap:10px;flex:1;flex-wrap:wrap">
+        ${toggle('ai_brains.'+k+'.enabled',b.enabled)}
+        <input class="form-input" style="width:180px" id="brain-model-${k}" value="${x(b.model||b.base_url||'')}" placeholder="${k==='ollama'?'base_url':'model'}" onchange="patchGlobal('ai_brains.${k}.${k==='ollama'?'base_url':'model'}',this.value)">
+        ${k!=='ollama'?`<input class="form-input" style="width:220px" id="brain-key-${k}" type="password" value="${x(b.api_key||'')}" placeholder="API key" onchange="patchGlobal('ai_brains.${k}.api_key',this.value)">`:''}
+        <button class="btn" onclick="testBrain('${k}')" id="brain-test-btn-${k}">Test</button>
+        <span class="brain-status" id="brain-status-${k}"></span>
+      </div>
+    </div>`).join('');
+
+  const intRows=Object.entries(integrations).map(([k,ig])=>`
+    <div class="settings-row">
+      <div class="settings-label"><strong>${k.charAt(0).toUpperCase()+k.slice(1)}</strong></div>
+      <div style="display:flex;align-items:center;gap:12px;flex:1">
+        ${toggle('integrations.'+k+'.enabled',ig.enabled)}
+        ${Object.entries(ig).filter(([f])=>f!=='enabled').map(([f,v])=>`<input class="form-input" style="flex:1" value="${x(String(v||''))}" placeholder="${x(f)}" onchange="patchGlobal('integrations.${k}.${f}',this.value)">`).join('')}
+      </div>
+    </div>`).join('');
+
+  const projRows=S.projects.map(p=>{
+    const ps=S.settings&&S.settings.projects&&S.settings.projects[p.id]||{};
+    return `<div class="settings-proj-block">
+      <div class="settings-proj-title">${x(p.name)}<span style="font-size:11px;color:var(--text3);margin-left:8px;font-family:monospace">${x(p.folder)}</span></div>
+      <div class="settings-row"><div class="settings-label">Watch filesystem</div>${toggle_proj(p.id,'watch_filesystem',ps.watch_filesystem!==false)}</div>
+      <div class="settings-row"><div class="settings-label">Notifications</div>${toggle_proj(p.id,'notifications_enabled',ps.notifications_enabled!==false)}</div>
+      <div class="settings-row"><div class="settings-label">Auto-create notes</div>${toggle_proj(p.id,'auto_create_notes',ps.auto_create_notes!==false)}</div>
+      <div class="settings-row"><div class="settings-label">Default brain</div>
+        <select class="form-select" style="width:160px" onchange="patchProject('${p.id}','default_brain',this.value)">
+          ${['claude','openai','gemini','grok','deepseek','ollama'].map(b=>`<option value="${b}" ${(ps.default_brain||'claude')===b?'selected':''}>${b}</option>`).join('')}
+        </select>
+      </div>
+      <div class="settings-row"><div class="settings-label">Default priority</div>
+        <select class="form-select" style="width:160px" onchange="patchProject('${p.id}','default_priority',this.value)">
+          ${['low','medium','high','critical'].map(pr=>`<option value="${pr}" ${(ps.default_priority||'medium')===pr?'selected':''}>${pr}</option>`).join('')}
+        </select>
+      </div>
+    </div>`;
+  }).join('');
+
+  return `
+    <div style="margin-bottom:20px;display:flex;align-items:center;justify-content:space-between">
+      <div><h2 style="font-size:20px;font-weight:700">⚙ Settings</h2><p style="font-size:13px;color:var(--text2);margin-top:4px">Global controls apply to all projects. Project controls override per-project.</p></div>
+      <button class="btn" onclick="scanProjects()" title="Re-scan /Users/sthanna/Downloads/Cursor for new projects">↻ Scan Projects</button>
+    </div>
+    <div class="panel" style="margin-bottom:20px">
+      <div class="panel-header"><div class="panel-title">🌐 Global Controls</div></div>
+      <div class="panel-body">
+        <div class="settings-row"><div class="settings-label">Watch filesystem</div>${toggle('watch_filesystem',g.watch_filesystem!==false)}</div>
+        <div class="settings-row"><div class="settings-label">Notifications</div>${toggle('notifications_enabled',g.notifications_enabled!==false)}</div>
+        <div class="settings-row"><div class="settings-label">Theme</div>
+          <select class="form-select" style="width:120px" onchange="patchGlobal('theme',this.value);if(this.value==='light'){document.body.classList.add('light');document.getElementById('theme-btn').textContent='☾';}else{document.body.classList.remove('light');document.getElementById('theme-btn').textContent='☀';}localStorage.setItem('theme',this.value)">
+            <option value="dark" ${(g.theme||'dark')==='dark'?'selected':''}>Dark</option>
+            <option value="light" ${g.theme==='light'?'selected':''}>Light</option>
+          </select>
+        </div>
+        <div class="settings-row"><div class="settings-label">Auto-refresh (s)</div><input class="form-input" style="width:80px" type="number" min="1" max="60" value="${g.auto_refresh_interval||3}" onchange="patchGlobal('auto_refresh_interval',+this.value)"></div>
+        <div class="settings-row"><div class="settings-label">Default priority</div>
+          <select class="form-select" style="width:120px" onchange="patchGlobal('default_priority',this.value)">
+            ${['low','medium','high','critical'].map(pr=>`<option value="${pr}" ${(g.default_priority||'medium')===pr?'selected':''}>${pr}</option>`).join('')}
+          </select>
+        </div>
+        <div class="settings-row"><div class="settings-label">Max loop iterations</div><input class="form-input" style="width:80px" type="number" min="1" max="100" value="${g.max_loop_iterations||10}" onchange="patchGlobal('max_loop_iterations',+this.value)"></div>
+      </div>
+    </div>
+    <div class="panel" style="margin-bottom:20px">
+      <div class="panel-header"><div class="panel-title">🧠 AI Brains</div></div>
+      <div class="panel-body">${brainRows}</div>
+    </div>
+    <div class="panel" style="margin-bottom:20px">
+      <div class="panel-header"><div class="panel-title">🔗 Integrations</div></div>
+      <div class="panel-body">${intRows}</div>
+    </div>
+    <div class="panel" style="margin-bottom:20px">
+      <div class="panel-header">
+        <div class="panel-title">🤖 Claude Code Config</div>
+        <button class="btn" onclick="loadClaudeConfig()">↻ Load from ~/.claude.json</button>
+      </div>
+      <div class="panel-body" id="claude-config-panel">
+        <div style="font-size:12px;color:var(--text3)">Click Load to import your current Claude Code settings.</div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-header"><div class="panel-title">📁 Per-Project Controls (${S.projects.length} projects)</div></div>
+      <div class="panel-body">${projRows||'<div class="empty-msg">No projects loaded</div>'}</div>
+    </div>`;
+}
+
+function toggle_proj(pid,field,val){
+  return `<label class="toggle-label"><input type="checkbox" onchange="patchProject('${pid}','${field}',this.checked)" ${val?'checked':''}><span class="toggle-slider"></span></label>`;
+}
+
+async function patchGlobal(dotPath,value){
+  const obj={};let cur=obj;const parts=dotPath.split('.');
+  parts.forEach((p,i)=>{cur[p]=i===parts.length-1?value:{};cur=cur[p];});
+  try{
+    const res=await api('PATCH','/settings/global',obj);
+    if(!S.settings)S.settings={};
+    S.settings.global=res;
+    console.log('[Settings] Global updated:',dotPath,'=',value);
+    render();
+  }catch(e){toast(e.message,'error');}
+}
+
+async function patchProject(pid,field,value){
+  try{
+    const res=await api('PATCH','/settings/projects/'+encodeURIComponent(pid),{[field]:value});
+    if(!S.settings)S.settings={};
+    if(!S.settings.projects)S.settings.projects={};
+    S.settings.projects[pid]=res;
+    console.log('[Settings] Project',pid,'updated:',field,'=',value);
+    render();
+  }catch(e){toast(e.message,'error');}
+}
+
+async function testBrain(brain){
+  const btn=document.getElementById('brain-test-btn-'+brain);
+  const statusEl=document.getElementById('brain-status-'+brain);
+  if(!btn||!statusEl)return;
+  const keyEl=document.getElementById('brain-key-'+brain);
+  const modelEl=document.getElementById('brain-model-'+brain);
+  const api_key=keyEl?keyEl.value:'';
+  const model=modelEl?modelEl.value:'';
+  const g=S.settings&&S.settings.global||{};
+  const brainCfg=(g.ai_brains||{})[brain]||{};
+  const base_url=brainCfg.base_url||'';
+
+  btn.disabled=true;btn.textContent='Testing…';
+  statusEl.textContent='';statusEl.className='brain-status';
+  console.log('[BrainTest] Testing',brain,'model:',model||'(default)');
+  try{
+    const res=await api('POST','/brains/test',{brain,api_key,model,base_url});
+    if(res.ok){
+      statusEl.textContent='✓ '+res.model;
+      statusEl.className='brain-status ok';
+      toast(brain+' connected — '+res.reply.slice(0,80));
+      console.log('[BrainTest]',brain,'OK | model:',res.model,'| reply:',res.reply);
+    }else{
+      statusEl.textContent='✗ '+res.error.slice(0,60);
+      statusEl.className='brain-status fail';
+      console.error('[BrainTest]',brain,'FAILED:',res.error);
+    }
+  }catch(e){
+    statusEl.textContent='✗ '+e.message.slice(0,60);
+    statusEl.className='brain-status fail';
+    console.error('[BrainTest]',brain,'ERROR:',e.message);
+  }
+  btn.disabled=false;btn.textContent='Test';
+}
+
+async function loadClaudeConfig(){
+  const panel=document.getElementById('claude-config-panel');
+  if(!panel)return;
+  panel.innerHTML='<div style="color:var(--text3);font-size:12px">Loading…</div>';
+  try{
+    const cfg=await api('GET','/brains/claude-config');
+    const rows=Object.entries(cfg).map(([k,v])=>`
+      <div class="settings-row" style="padding:6px 0">
+        <div class="settings-label" style="font-family:monospace;font-size:12px">${x(k)}</div>
+        <div style="font-size:12px;color:var(--text)">${x(String(v))}</div>
+      </div>`).join('');
+    panel.innerHTML=rows||'<div class="empty-msg">No config found</div>';
+    // Apply theme from Claude config
+    if(cfg.theme==='light'){document.body.classList.add('light');document.getElementById('theme-btn').textContent='☾';localStorage.setItem('theme','light');}
+    console.log('[ClaudeConfig] Loaded:',JSON.stringify(cfg,null,2));
+    toast('Claude config loaded');
+  }catch(e){
+    panel.innerHTML='<div class="empty-msg" style="color:var(--red)">'+x(e.message)+'</div>';
+    console.error('[ClaudeConfig] Failed:',e.message);
+  }
+}
+
+async function scanProjects(){
+  try{
+    const res=await api('POST','/projects/scan');
+    res.projects.forEach(p=>upsert(S.projects,p));
+    toast('Found '+res.added+' projects');
+    console.log('[Scan] Seeded',res.added,'projects');
+    render();
+  }catch(e){toast(e.message,'error');}
+}
+
+function toggleTheme(){
+  document.body.classList.toggle('light');
+  const isLight=document.body.classList.contains('light');
+  document.getElementById('theme-btn').textContent=isLight?'☾':'☀';
+  localStorage.setItem('theme',isLight?'light':'dark');
+}
+if(localStorage.getItem('theme')==='light'){document.body.classList.add('light');document.getElementById('theme-btn').textContent='☾';}
+
+async function pollSnapshot(){
+  try{
+    const snap=await api('GET','/snapshot');
+    S.projects=snap.projects||[];S.tasks=snap.tasks||[];S.loops=snap.loops||[];S.processes=snap.processes||[];S.settings=snap.settings||{};
+    console.log('[Poll] Refreshed at',new Date().toLocaleTimeString(),'— projects:'+S.projects.length+' tasks:'+S.tasks.length+' procs:'+S.processes.length);
+    // Load MCP servers on first poll (or if empty)
+    if(!S.mcpServers.length){
+      try{S.mcpServers=await api('GET','/mcp/servers');document.getElementById('mcp-badge').textContent=S.mcpServers.length;console.log('[MCP] Loaded',S.mcpServers.length,'servers');}catch(e){console.error('[MCP] Load failed:',e.message);}
+    }
+    render();
+  }catch(e){console.error('[Poll] Failed:',e.message);}
+}
+
+async function toggleMCP(name, source_file, enabled){
+  try{
+    await api('PATCH','/mcp/toggle',{name,source_file,enabled});
+    const s=S.mcpServers.find(m=>m.name===name&&m.source_file===source_file);
+    if(s)s.disabled=!enabled;
+    toast((enabled?'Enabled':'Disabled')+': '+name);
+    console.log('[MCP] Toggle',name,enabled?'→ enabled':'→ disabled','in',source_file);
+    render();
+  }catch(e){toast(e.message,'error');console.error('[MCP] Toggle failed:',e.message);}
+}
+
+async function refreshMCP(){
+  try{
+    S.mcpServers=await api('GET','/mcp/servers');
+    document.getElementById('mcp-badge').textContent=S.mcpServers.length;
+    console.log('[MCP] Refreshed',S.mcpServers.length,'servers');
+    render();
+    toast('MCP: '+S.mcpServers.length+' servers loaded');
+  }catch(e){toast(e.message,'error');}
+}
+setInterval(pollSnapshot,3000);
+
+connectWS();render();
+</script>
+</body>
+</html>

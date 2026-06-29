@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+*.pyo
+.env
+.env.*
+data/state.json
+logs/*.jsonl
+notes/
+tmp/*.py
+tmp/*.sh
+*.tmp
+.DS_Store
