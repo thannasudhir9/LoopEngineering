@@ -1,6 +1,6 @@
 # LoopEngineering — Architecture
 
-*Last updated: 2026-06-29*
+*Last updated: 2026-06-29 (session 2)*
 
 ---
 
@@ -14,12 +14,14 @@ Browser (index.html)
     │   REST  http://localhost:7070/api/*    (read/write)
     ▼
 FastAPI (server.py)  :7070
-    ├── State Store     (src/state.py)          ← in-memory + data/state.json
-    ├── Process Monitor (src/monitor.py)         ← psutil scan every 5s
-    ├── FS Watcher      (src/watcher.py)         ← watchdog per project
-    ├── Notes Generator (src/notes.py)           ← markdown per task
-    ├── Prompt Logger   (src/prompt_log.py)      ← JSONL audit trail
-    └── MCP Scanner     (server.py)              ← reads ~/.claude* + local settings
+    ├── State Store       (src/state.py)          ← in-memory + data/state.json
+    ├── Process Monitor   (src/monitor.py)         ← psutil scan every 5s
+    ├── FS Watcher        (src/watcher.py)         ← watchdog per project
+    ├── Notes Generator   (src/notes.py)           ← markdown per task
+    ├── Prompt Logger     (src/prompt_log.py)      ← JSONL audit trail
+    ├── MCP Scanner       (server.py)              ← reads ~/.claude* + local settings
+    ├── SF Ecosystem      (src/sf_ecosystem.py)    ← 12 SF clouds + brain mapping
+    └── Web Intelligence  (src/web_intel.py)       ← GitHub, Reddit, HN, Dev.to
 ```
 
 ---
@@ -34,6 +36,8 @@ FastAPI (server.py)  :7070
 - Brain testers: `_test_claude`, `_test_openai`, `_test_gemini`, `_test_grok`, `_test_deepseek`, `_test_ollama`
 - MCP scanner: reads `~/.claude.json`, `~/.claude/settings.json`, local `.claude/settings.json`
 - MCP toggle: writes `disabled: true` flag into source config file (atomic)
+- SF Ecosystem: serves cloud registry with brain mapping from `src/sf_ecosystem.py`
+- Web Intel: proxy to `src/web_intel.py` for GitHub/Reddit/HN/Dev.to searches
 
 ### `src/state.py` — Central State Store
 - Single `_state` dict: `{projects, tasks, loops, processes, settings}`
@@ -61,17 +65,39 @@ FastAPI (server.py)  :7070
 
 ### `src/prompt_log.py` — Prompt / Interaction Logger
 - Appends JSONL entries to `logs/prompts-YYYY-MM-DD.jsonl`
-- Logs: task_created, loop_started, loop_log, loop_finished, brain_test, mcp_toggle, settings_updated
+- Logs: task_created, loop_started, brain_test, mcp_toggle, user_prompt, web_intel_search
 - Thread-safe: uses `asyncio.Lock` for file writes
 - Daily rotation: new file per day, never truncated
+- `POST /api/logs/prompt` — capture raw user prompts from UI or external tools
+
+### `src/sf_ecosystem.py` — Salesforce Ecosystem Registry (NEW)
+- `SF_CLOUDS` dict: 12 Salesforce clouds with icon, color, desc, MCP server, search keywords
+- `BRAIN_SF_MAPPING`: recommended primary + secondary AI brain per cloud
+- Clouds: Agentforce, Revenue Cloud, Data Cloud, Field Service, Sales Cloud, Service Cloud,
+  Experience Cloud, Marketing Cloud, Commerce Cloud, OmniStudio, Loyalty, Industry Clouds
+- `get_all_clouds()`, `get_cloud(id)`, `get_brain_for_cloud(id)`
+
+### `src/web_intel.py` — Web Intelligence (NEW)
+- Async multi-source search using `httpx`
+- Sources: GitHub (repos by stars), Reddit (r/salesforce+others), Hacker News, Dev.to
+- `multi_search(query, sources, limit)` — runs all sources in parallel via `asyncio.gather`
+- Returns unified list per source: `{source, title, desc, url, stars/score, comments, author}`
+- No auth required — all public APIs
 
 ### `dashboard/index.html` — Single-File Frontend
-- Vanilla JS, zero framework, zero build step — open in any browser
-- State `S`: projects, tasks, loops, processes, settings, mcpServers, fsEvents
-- WebSocket for real-time push + 3s HTTP poll (`pollSnapshot`) as fallback
-- Views: overview, processes, tasks, loops, activity, roadmap, settings, mcp, console
-- Theme: dark/light toggle, persists `localStorage`
-- Console log capture: wraps `console.log/warn/error/info`
+- Vanilla JS, zero framework, zero build step
+- State `S`: projects, tasks, loops, processes, settings, mcpServers, fsEvents, sfEcosystem, webIntel, analytics, perf
+- WebSocket real-time push + 3s HTTP poll fallback
+- Views: overview, processes, tasks, loops, activity, roadmap, settings, mcp, console, salesforce, web-intel, analytics
+- Show/hide projects sidebar button
+- Performance tracking: API latency per endpoint, render time
+- Analytics: task creation rate, loop success rate, brain usage, process uptime
+
+### `salesforce-ecosystem/` — Salesforce Project Folders (NEW)
+- Located at `LoopEngineering/salesforce-ecosystem/`
+- 12 sub-folders: agentforce, revenue-cloud, data-cloud, field-service, sales-cloud, service-cloud,
+  experience-cloud, marketing-cloud, commerce-cloud, omnistudio, loyalty-cloud, industry-clouds
+- Each has `src/` subfolder for code, Apex classes, LWC, metadata
 
 ---
 
@@ -99,6 +125,25 @@ HTTP 200 response JSON
 upsert(S.tasks, t) → render()
 ```
 
+### Web Intel Flow
+```
+User searches "salesforce agentforce"
+    │
+    ▼
+POST /api/web-intel/search {query, sources, limit}
+    │
+    ▼
+web_intel.multi_search() → asyncio.gather(
+    search_github(), search_reddit(), search_hackernews(), search_devto()
+)
+    │
+    ▼
+{github:[...], reddit:[...], hackernews:[...], devto:[...]}
+    │
+    ▼
+prompt_log.log("web_intel_search", ...)
+```
+
 ---
 
 ## Storage Layout
@@ -117,9 +162,20 @@ notes/
       loop-log.md         — iteration history
 
 logs/
-  prompts-YYYY-MM-DD.jsonl — all interactions, JSONL, append-only, daily rotation
+  prompts-YYYY-MM-DD.jsonl     — all interactions, JSONL, append-only, daily rotation
+  SESSION-YYYY-MM-DD-prompts.md — human-readable session prompt history
+  README.md                    — log format documentation
+
+salesforce-ecosystem/          — 12 Salesforce cloud project folders
+  agentforce/src/
+  revenue-cloud/src/
+  data-cloud/src/
+  ... (12 total)
 
 tmp/                       — scratch: experiments, test scripts, one-off work
+
+prd/                       — 8 product requirement documents
+docs/                      — architecture, design, plan, future scope
 ```
 
 ---
@@ -149,6 +205,10 @@ tmp/                       — scratch: experiments, test scripts, one-off work
 | PATCH | `/api/mcp/toggle` | Enable/disable MCP server in config |
 | POST | `/api/brains/test` | Test AI brain connectivity |
 | GET | `/api/brains/claude-config` | Import Claude Code local config |
+| GET | `/api/sf/ecosystem` | All 12 SF clouds + brain mapping |
+| POST | `/api/web-intel/search` | Search GitHub/Reddit/HN/Dev.to |
+| POST | `/api/logs/prompt` | Capture raw user prompt |
+| GET | `/api/logs` | Read last N days of JSONL logs |
 | WS | `/ws` | Real-time event stream |
 
 ---
@@ -176,4 +236,5 @@ tmp/                       — scratch: experiments, test scripts, one-off work
 - `GET /api/brains/claude-config` returns only safe (non-secret) fields
 - `GET /api/mcp/servers` strips `env` blocks (may contain tokens)
 - `data/state.json` is local only — no remote sync
+- Web Intel calls public APIs only — no auth tokens sent
 - No authentication — single-user local tool

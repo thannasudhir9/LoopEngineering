@@ -15,7 +15,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
-from src import state, monitor, watcher, notes, prompt_log
+from src import state, monitor, watcher, notes, prompt_log, web_intel, sf_ecosystem
 
 DASHBOARD_DIR = Path(__file__).parent / "dashboard"
 
@@ -592,3 +592,37 @@ async def scan_projects(root: str = str(CURSOR_ROOT)):
             proj = state.upsert_project(str(child))
             added.append(proj)
     return {"added": len(added), "projects": added}
+
+
+# ── Salesforce Ecosystem ───────────────────────────────────────────────────────
+
+@app.get("/api/sf/ecosystem")
+async def get_sf_ecosystem():
+    clouds = sf_ecosystem.get_all_clouds()
+    result = {}
+    for cloud_id, cloud in clouds.items():
+        result[cloud_id] = {
+            **cloud,
+            "brain": sf_ecosystem.get_brain_for_cloud(cloud_id),
+            "task_count": len([t for t in state.get_tasks()
+                               if cloud["folder"] in (t.get("tags") or [])]),
+        }
+    return result
+
+
+# ── Web Intelligence ───────────────────────────────────────────────────────────
+
+class WebIntelSearchIn(BaseModel):
+    query: str
+    sources: list[str] = ["github", "reddit", "hackernews", "devto"]
+    limit: int = 8
+
+
+@app.post("/api/web-intel/search")
+async def web_intel_search(body: WebIntelSearchIn):
+    if not body.query.strip():
+        raise HTTPException(400, "query required")
+    results = await web_intel.multi_search(body.query, body.sources, body.limit)
+    await prompt_log.log("web_intel_search", query=body.query, sources=body.sources,
+                         counts={k: len(v) for k, v in results.items()})
+    return results
