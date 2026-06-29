@@ -37,9 +37,18 @@ All user prompts from this Claude Code session, in order. Nothing omitted.
 
 ---
 
+## New Session — 2026-06-29 (continued after context reset ~11:30 UTC)
+
+| # | Time (UTC est.) | Prompt |
+|---|-----------------|--------|
+| 20 | 2026-06-29 ~11:30 | Continue from where you left off. |
+| 21 | 2026-06-29 ~11:33 | dont miss anything , track all prompt inputs into this prompt log readme file /Users/sthanna/Downloads/Cursor/LoopEngineering/logs |
+
+---
+
 ## Notes
 - Times are UTC estimates — exact timestamps not available from compacted context
-- Machine-readable JSONL logs at `logs/prompts-YYYY-MM-DD.jsonl` (written by server on every API action)
-- Server now running on `http://localhost:7070` — JSONL entries begin from this restart
+- Machine-readable JSONL logs at `logs/prompts-YYYY-MM-DD.jsonl` (written by server on every API action + raw user prompts via `POST /api/logs/prompt`)
 - GitHub token in prompt #16 should be revoked: https://github.com/settings/tokens
-- Full transcript available at: `/Users/sthanna/.claude/projects/-Users-sthanna-Downloads-Cursor-LoopEngineering/bb078302-5fd7-4eb1-b849-f1ff7bdd3b8e.jsonl`
+- Full transcript: `/Users/sthanna/.claude/projects/-Users-sthanna-Downloads-Cursor-LoopEngineering/bb078302-5fd7-4eb1-b849-f1ff7bdd3b8e.jsonl`
+- **All future prompts** captured automatically via `POST /api/logs/prompt` endpoint (see README.md in this folder)

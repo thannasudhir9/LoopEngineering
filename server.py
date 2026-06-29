@@ -563,6 +563,24 @@ async def get_claude_config():
     return safe
 
 
+# ── Logs / Prompt Capture ─────────────────────────────────────────────────────
+
+class PromptIn(BaseModel):
+    text: str
+    source: str = "user"   # user | claude | cursor | other
+
+
+@app.post("/api/logs/prompt")
+async def log_prompt(body: PromptIn):
+    await prompt_log.log("user_prompt", source=body.source, text=body.text)
+    return {"ok": True}
+
+
+@app.get("/api/logs")
+async def get_logs(days: int = 3):
+    return prompt_log.read_logs(days)
+
+
 @app.post("/api/projects/scan")
 async def scan_projects(root: str = str(CURSOR_ROOT)):
     root_path = Path(root).expanduser().resolve()
